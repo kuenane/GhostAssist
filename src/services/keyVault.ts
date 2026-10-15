@@ -1,7 +1,13 @@
 import { AIProvider, ProviderConfig } from '../types';
+import {
+  getSecureKey,
+  setSecureKey,
+  deleteSecureKey,
+} from './secureKeyVault';
 
 const VAULT_STORAGE_KEY = 'ghostassist_vault_v1';
 const VAULT_SALT = 'ga_stealth_2026_';
+const MIGRATION_FLAG_KEY = 'ghostassist_keyvault_migrated_v1';
 
 // Simple lightweight cipher for local obfuscation against accidental memory inspection
 function encodeSecret(raw: string): string {
@@ -117,54 +123,98 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
 
 class KeyVaultService {
   private configs: Map<AIProvider, ProviderConfig> = new Map();
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
-    this.loadFromStorage();
+    // Initialize synchronously with defaults first
+    DEFAULT_PROVIDERS.forEach((p) => this.configs.set(p.id, { ...p }));
+    // Then start async initialization
+    this.initPromise = this.initialize();
   }
 
-  private loadFromStorage(): void {
-    // Start with defaults
-    DEFAULT_PROVIDERS.forEach((p) => this.configs.set(p.id, { ...p }));
+  private async initialize(): Promise<void> {
+    if (this.initialized) return;
 
     try {
-      const stored = localStorage.getItem(VAULT_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        for (const [providerId, data] of Object.entries(parsed)) {
-          const id = providerId as AIProvider;
-          const existing = this.configs.get(id);
-          if (existing && data && typeof data === 'object') {
-            const rawKey = decodeSecret((data as any).encKey || '');
-            this.configs.set(id, {
-              ...existing,
-              apiKey: rawKey,
-              model: (data as any).model || existing.model,
-              baseUrl: (data as any).baseUrl || existing.baseUrl,
-              enabled: (data as any).enabled !== undefined ? (data as any).enabled : existing.enabled,
-              status: rawKey ? 'ready' : (id === 'gemini' ? 'ready' : 'unconfigured'),
-            });
-          }
-        }
+      // Check if migration has already been done
+      const migrationDone = localStorage.getItem(MIGRATION_FLAG_KEY);
+
+      if (!migrationDone) {
+        await this.migrateFromLocalStorage();
+        localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
       }
+
+      // Load all keys from secure storage
+      await this.loadFromSecureStorage();
     } catch (e) {
-      console.warn('Failed to load key vault from localStorage:', e);
+      console.error('Failed to initialize key vault:', e);
+    } finally {
+      this.initialized = true;
     }
   }
 
-  saveToStorage(): void {
+  private async migrateFromLocalStorage(): Promise<void> {
     try {
-      const serializable: Record<string, any> = {};
-      this.configs.forEach((config, provider) => {
-        serializable[provider] = {
-          encKey: encodeSecret(config.apiKey),
-          model: config.model,
-          baseUrl: config.baseUrl,
-          enabled: config.enabled,
-        };
-      });
-      localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(serializable));
+      const stored = localStorage.getItem(VAULT_STORAGE_KEY);
+      if (!stored) return;
+
+      const parsed = JSON.parse(stored);
+      let migratedCount = 0;
+
+      for (const [providerId, data] of Object.entries(parsed)) {
+        const provider = providerId as AIProvider;
+        const existing = this.configs.get(provider);
+        if (!existing || !data || typeof data !== 'object') continue;
+
+        const rawKey = decodeSecret((data as any).encKey || '');
+        if (rawKey && rawKey.trim()) {
+          // Save to secure storage
+          await setSecureKey(provider, rawKey);
+          migratedCount++;
+        }
+      }
+
+      if (migratedCount > 0) {
+        // Clear the old localStorage vault
+        localStorage.removeItem(VAULT_STORAGE_KEY);
+        console.log(`[KeyVault] Migrated ${migratedCount} API keys to secure storage`);
+      }
     } catch (e) {
-      console.error('Failed to save key vault:', e);
+      console.warn('Migration from localStorage failed (may be first run):', e);
+    }
+  }
+
+  private async loadFromSecureStorage(): Promise<void> {
+    for (const provider of this.configs.keys()) {
+      try {
+        const secureKey = await getSecureKey(provider);
+        const existing = this.configs.get(provider);
+        if (existing && secureKey) {
+          this.configs.set(provider, {
+            ...existing,
+            apiKey: secureKey,
+            status: secureKey ? 'ready' : (provider === 'gemini' ? 'ready' : 'unconfigured'),
+          });
+        }
+      } catch (e) {
+        console.warn(`Failed to load secure key for ${provider}:`, e);
+      }
+    }
+  }
+
+  private async saveToSecureStorage(provider: AIProvider, key: string): Promise<void> {
+    if (key && key.trim()) {
+      await setSecureKey(provider, key.trim());
+    } else {
+      await deleteSecureKey(provider);
+    }
+  }
+
+  // Ensure initialization is complete before any operation
+  private async ensureInitialized(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
     }
   }
 
@@ -176,15 +226,19 @@ class KeyVaultService {
     return this.configs.get(provider);
   }
 
-  setKey(provider: AIProvider, key: string, model?: string, baseUrl?: string): void {
+  async setKey(provider: AIProvider, key: string, model?: string, baseUrl?: string): Promise<void> {
+    await this.ensureInitialized();
+
     const existing = this.configs.get(provider);
     if (!existing) return;
 
-    existing.apiKey = key.trim();
+    const trimmedKey = key.trim();
+    existing.apiKey = trimmedKey;
     if (model) existing.model = model.trim();
     if (baseUrl) existing.baseUrl = baseUrl.trim();
-    existing.status = existing.apiKey || provider === 'gemini' ? 'ready' : 'unconfigured';
-    this.saveToStorage();
+    existing.status = trimmedKey || provider === 'gemini' ? 'ready' : 'unconfigured';
+
+    await this.saveToSecureStorage(provider, trimmedKey);
   }
 
   maskKey(key: string): string {

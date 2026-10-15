@@ -1,6 +1,8 @@
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
+mod keyvault;
+
 const HOTKEYS: [(Code, &str); 5] = [
     (Code::KeyX, "KeyX"), // panic hide
     (Code::KeyA, "KeyA"), // quick answer
@@ -34,6 +36,12 @@ pub fn run() {
                 })
                 .build(),
         )
+        .invoke_handler(tauri::generate_handler![
+            keyvault::get_api_key,
+            keyvault::set_api_key,
+            keyvault::delete_api_key,
+            keyvault::list_providers,
+        ])
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 // Windows: WDA_EXCLUDEFROMCAPTURE, macOS: NSWindowSharingNone

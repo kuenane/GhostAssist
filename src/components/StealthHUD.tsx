@@ -83,7 +83,9 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeAnswerMode, setActiveAnswerMode] = useState<AnswerMode>('bullet');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
+  const [showTranscripts, setShowTranscripts] = useState(false);
+  const [showMoreModes, setShowMoreModes] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [isTeleprompterActive, setIsTeleprompterActive] = useState(false);
   const [lastQuestionDetected, setLastQuestionDetected] = useState<string | null>(null);
@@ -202,6 +204,8 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
       className={`fixed z-30 transition-[opacity,backdrop-filter] duration-200 select-none ${
         settings.overlayMode === 'top-notch' ? 'w-[680px] max-w-[95vw]' : 'w-[520px] max-w-[95vw]'
       } rounded-2xl border border-white/10 bg-[#070b13]/85 text-slate-100 shadow-2xl shadow-black/80 font-sans`}
+      onMouseEnter={() => !isMinimized && setIsMinimized(false)}
+      onMouseLeave={() => !isMinimized && setTimeout(() => setIsMinimized(true), 2000)}
     >
       {/* Click-through warning overlay when click-through is enabled */}
       {settings.clickThrough && (
@@ -429,19 +433,43 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
                 <span>Code &amp; Big-O</span>
               </button>
 
-              <button
-                onClick={() => handleGenerate('clarify')}
-                disabled={isGenerating}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition ${
-                  activeAnswerMode === 'clarify'
-                    ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Senior-level clarifying questions to buy time"
-              >
-                <HelpCircle className="w-3 h-3 text-amber-400" />
-                <span>Clarify</span>
-              </button>
+              {/* More menu for additional modes */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMoreModes(!showMoreModes)}
+                  disabled={isGenerating}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition ${
+                    showMoreModes
+                      ? 'bg-slate-800/80 text-white border border-white/10'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="More answer modes"
+                >
+                  <Layout className="w-3 h-3" />
+                  <span>More</span>
+                  <RotateCcw className={`w-3 h-3 transition-transform ${showMoreModes ? 'rotate-180' : ''}`} />
+                </button>
+                {showMoreModes && (
+                  <div className="absolute bottom-full right-0 mb-1 bg-slate-900/95 border border-white/10 rounded-lg shadow-lg py-1 min-w-[140px] z-10 animate-fade-in">
+                    <button
+                      onClick={() => { handleGenerate('architecture'); setShowMoreModes(false); }}
+                      disabled={isGenerating}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-white/5 hover:text-white transition text-left text-xs"
+                    >
+                      <Code className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Architecture</span>
+                    </button>
+                    <button
+                      onClick={() => { handleGenerate('clarify'); setShowMoreModes(false); }}
+                      disabled={isGenerating}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-white/5 hover:text-white transition text-left text-xs"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Clarify</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Test Simulation Button */}
@@ -575,6 +603,16 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setShowTranscripts(!showTranscripts)}
+                  className={`text-slate-500 hover:text-slate-300 text-[10px] flex items-center gap-1 ${
+                    showTranscripts ? 'text-cyan-400' : ''
+                  }`}
+                  title="Toggle transcript panel"
+                >
+                  <Bookmark className="w-2.5 h-2.5" />
+                  <span>{showTranscripts ? 'Hide' : 'Show'} Transcripts</span>
+                </button>
+                <button
                   onClick={onClearTranscripts}
                   className="text-slate-500 hover:text-slate-300 text-[10px] flex items-center gap-1"
                   title="Clear live transcripts"
@@ -585,47 +623,48 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
               </div>
             </div>
 
-            {/* Transcript scroll box */}
-            <div className="max-h-36 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
-              {transcripts.length === 0 ? (
-                <div className="py-4 text-center text-slate-500 text-[11px]">
-                  No speech captured yet. Click &ldquo;Start Audio&rdquo; above or &ldquo;Mock Call&rdquo; to test.
-                </div>
-              ) : (
-                transcripts.slice(-8).map((t) => {
-                  const isInterviewer = t.speaker === 'interviewer';
-                  return (
-                    <div
-                      key={t.id}
-                      className={`p-2 rounded-lg text-xs leading-snug transition border ${
-                        isInterviewer
-                          ? 'bg-cyan-950/20 border-cyan-500/20 text-cyan-100'
-                          : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[10px] opacity-70 mb-1">
-                        <span className="font-bold flex items-center gap-1">
-                          {isInterviewer ? (
-                            <>
-                              <Monitor className="w-3 h-3 text-cyan-400" />
-                              <span className="text-cyan-300">INTERVIEWER / CALL</span>
-                            </>
-                          ) : (
-                            <>
-                              <Mic className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-300">YOU (CANDIDATE)</span>
-                            </>
-                          )}
-                        </span>
-                        <span>{new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            {showTranscripts && (
+              <div className="max-h-36 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
+                {transcripts.length === 0 ? (
+                  <div className="py-4 text-center text-slate-500 text-[11px]">
+                    No speech captured yet. Click &ldquo;Start Audio&rdquo; above or &ldquo;Mock Call&rdquo; to test.
+                  </div>
+                ) : (
+                  transcripts.slice(-8).map((t) => {
+                    const isInterviewer = t.speaker === 'interviewer';
+                    return (
+                      <div
+                        key={t.id}
+                        className={`p-2 rounded-lg text-xs leading-snug transition border ${
+                          isInterviewer
+                            ? 'bg-cyan-950/20 border-cyan-500/20 text-cyan-100'
+                            : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] opacity-70 mb-1">
+                          <span className="font-bold flex items-center gap-1">
+                            {isInterviewer ? (
+                              <>
+                                <Monitor className="w-3 h-3 text-cyan-400" />
+                                <span className="text-cyan-300">INTERVIEWER / CALL</span>
+                              </>
+                            ) : (
+                              <>
+                                <Mic className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-300">YOU (CANDIDATE)</span>
+                              </>
+                            )}
+                          </span>
+                          <span>{new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        </div>
+                        <p className="font-sans text-[12.5px]">{t.text}</p>
                       </div>
-                      <p className="font-sans text-[12.5px]">{t.text}</p>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={transcriptsEndRef} />
-            </div>
+                    );
+                  })
+                )}
+                <div ref={transcriptsEndRef} />
+              </div>
+            )}
           </div>
         </div>
       )}

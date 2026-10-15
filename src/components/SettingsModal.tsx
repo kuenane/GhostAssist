@@ -46,25 +46,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setVisibleKeys((prev) => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
-  const handleKeyChange = (providerId: AIProvider, newKey: string) => {
-    keyVault.setKey(providerId, newKey);
+  const handleKeyChange = async (providerId: AIProvider, newKey: string) => {
+    await keyVault.setKey(providerId, newKey);
     setProviders(keyVault.getAllConfigs());
     showSavedIndicator();
   };
 
-  const handleModelChange = (providerId: AIProvider, newModel: string) => {
+  const handleModelChange = async (providerId: AIProvider, newModel: string) => {
     const config = keyVault.getConfig(providerId);
     if (config) {
-      keyVault.setKey(providerId, config.apiKey, newModel, config.baseUrl);
+      await keyVault.setKey(providerId, config.apiKey, newModel, config.baseUrl);
       setProviders(keyVault.getAllConfigs());
       showSavedIndicator();
     }
   };
 
-  const handleBaseUrlChange = (providerId: AIProvider, newBaseUrl: string) => {
+  const handleBaseUrlChange = async (providerId: AIProvider, newBaseUrl: string) => {
     const config = keyVault.getConfig(providerId);
     if (config) {
-      keyVault.setKey(providerId, config.apiKey, config.model, newBaseUrl);
+      await keyVault.setKey(providerId, config.apiKey, config.model, newBaseUrl);
       setProviders(keyVault.getAllConfigs());
       showSavedIndicator();
     }

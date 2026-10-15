@@ -79,6 +79,7 @@ export default function App() {
   const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
   const [isPanicHidden, setIsPanicHidden] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showHeader, setShowHeader] = useState(false);
 
   // Active Session
   const [currentSessionId, setCurrentSessionId] = useState<string>('sess_active');
@@ -242,6 +243,13 @@ export default function App() {
         showToast('Click-Through Toggled');
         return;
       }
+
+      // Alt+Space: Toggle Header / Setup Mode
+      if (e.altKey && e.code === 'Space') {
+        e.preventDefault();
+        setShowHeader((prev) => !prev);
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -325,98 +333,29 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Header Navbar */}
-      <HeaderNavbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isListening={isListening}
-        toggleListening={toggleAudioCapture}
-        panicHide={() => setIsPanicHidden((prev) => !prev)}
-        activeProvider={activeProvider}
-        isStealthExcluded={settings.screenExclusionActive}
-        onOpenSnipper={() => setIsSnipperOpen(true)}
-        hasResumeGrounding={Boolean(resumeProfile?.useResumeContext)}
-        onOpenGitHubModal={() => setIsGitHubModalOpen(true)}
-      />
+      {/* Top Header Navbar - Only in Setup Mode */}
+      {(() => {
+        const isSetupTab = ['resume', 'lab', 'tauri', 'settings', 'history', 'snipper'].includes(activeTab);
+        if (!showHeader && !isSetupTab) return null;
+        return (
+          <HeaderNavbar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            isListening={isListening}
+            toggleListening={toggleAudioCapture}
+            panicHide={() => setIsPanicHidden((prev) => !prev)}
+            activeProvider={activeProvider}
+            isStealthExcluded={settings.screenExclusionActive}
+            onOpenSnipper={() => setIsSnipperOpen(true)}
+            hasResumeGrounding={Boolean(resumeProfile?.useResumeContext)}
+            onOpenGitHubModal={() => setIsGitHubModalOpen(true)}
+          />
+        );
+      })()}
 
       {/* Main Tab Router */}
       <main className="flex-1 pb-16">
-        {activeTab === 'hud' && (
-          <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-            {/* HUD Overview / Desktop Environment Preview */}
-            <div className="rounded-2xl border border-white/10 bg-[#070b13] p-6 space-y-4 relative overflow-hidden">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-mono">
-                    <Ghost className="w-3.5 h-3.5" />
-                    <span>Overlay Active &amp; Ready</span>
-                  </div>
-                  <h2 className="text-xl font-bold text-white">
-                    Live Stealth HUD Desktop Workspace
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    The translucent floating window below is your active interview HUD. You can drag it,
-                    adjust opacity, snip code questions, and dock it directly beneath your webcam for
-                    natural eye-contact.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsSnipperOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 transition"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>Snip Problem (Alt+S)</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('resume')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/25 transition"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>My Resume</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('lab')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/25 transition"
-                  >
-                    <EyeOff className="w-3.5 h-3.5" />
-                    <span>Test Invisibility</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Background Mock Desktop environment */}
-              <div className="rounded-xl border border-white/5 bg-slate-950 p-4 font-mono text-xs text-slate-500 select-none min-h-[360px] relative overflow-hidden">
-                <div className="flex items-center justify-between pb-2 mb-3 border-b border-white/5 text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <Monitor className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Simulated Desktop Background (VS Code / Zoom / Chrome)</span>
-                  </span>
-                  <span className="text-emerald-400 font-bold">
-                    Zoom Screen Share Status: Excluded (Invisible)
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 opacity-60">
-                  <p><span className="text-cyan-400 font-bold">// Live Interview Prompt:</span> Design an in-memory Key-Value store with TTL and LRU eviction.</p>
-                  <p className="text-purple-400">interface <span className="text-yellow-300">CacheEntry</span>&lt;T&gt; &#123;</p>
-                  <p className="pl-4">value: T;</p>
-                  <p className="pl-4">expiresAt: number;</p>
-                  <p className="pl-4">accessCount: number;</p>
-                  <p>&#125;</p>
-                  <p className="text-slate-400 pt-2">// Tips: Click "Quick Speak" or "STAR Method" on the floating Ghost HUD to answer.</p>
-                </div>
-
-                <div className="absolute bottom-3 right-3 text-[11px] text-slate-500">
-                  Press <kbd className="px-1.5 py-0.5 rounded bg-black/60 text-cyan-300 border border-white/10 font-mono">Alt+A</kbd> for instant AI talking points
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'hud' && null}
 
         {activeTab === 'resume' && (
           <ResumeKnowledgeBase
