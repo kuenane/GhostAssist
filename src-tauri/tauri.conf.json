@@ -1,41 +1,20 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GhostAssist",
+  "version": "1.0.0",
+  "identifier": "com.ghostassist.app",
   "build": {
     "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:3000",
-    "distDir": "../dist"
+    "frontendDist": "../dist"
   },
-  "package": {
-    "productName": "GhostAssist",
-    "version": "1.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "window": {
-        "all": true
-      },
-      "globalShortcut": {
-        "all": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "category": "Productivity",
-      "copyright": "GhostAssist Open Source",
-      "deb": { "depends": [] },
-      "icon": ["icons/icon.png"],
-      "identifier": "com.ghostassist.app",
-      "targets": "all"
-    },
+  "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "GhostAssist Overlay",
+        "label": "main",
+        "title": "GhostAssist",
         "width": 540,
         "height": 520,
         "resizable": true,
@@ -44,8 +23,17 @@
         "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": false,
-        "visible": true
+        "contentProtected": true
       }
-    ]
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "copyright": "GhostAssist Open Source",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "macOS": { "minimumSystemVersion": "12.0" }
   }
 }

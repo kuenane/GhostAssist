@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { StealthSettings, AIProvider, ProviderConfig } from '../types';
+import { isDesktop } from '../services/http';
 import { keyVault } from '../services/keyVault';
 import { dbService } from '../services/db';
 
@@ -78,8 +79,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTestStatus((prev) => ({ ...prev, [provider]: 'testing' }));
     try {
       if (provider === 'gemini') {
-        const res = await fetch('/api/health');
-        if (res.ok) {
+        const ok = isDesktop()
+          ? Boolean(keyVault.getConfig('gemini')?.apiKey)
+          : (await fetch('/api/health')).ok;
+        if (ok) {
           setTestStatus((prev) => ({ ...prev, [provider]: 'ok' }));
         } else {
           setTestStatus((prev) => ({ ...prev, [provider]: 'error' }));

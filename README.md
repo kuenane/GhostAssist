@@ -58,36 +58,51 @@ GhostAssist is a fast, lightweight native desktop overlay app built with React, 
 ## 🚀 Quickstart
 
 ### 1. Install Dependencies
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ### 2. Configure Environment (Optional for Gemini Server)
 Copy `.env.example` to `.env`:
-\`\`\`bash
+```bash
 cp .env.example .env
-\`\`\`
+```
 Set your `GEMINI_API_KEY` or bring your own keys directly in the in-app BYOK vault (NVIDIA NIM, Groq, OpenAI, Anthropic, DeepSeek, Ollama).
 
 ### 3. Run Development Server
-\`\`\`bash
+```bash
 npm run dev
-\`\`\`
-Visit \`http://localhost:3000\` to open the GhostAssist HUD and test lab.
+```
+Visit `http://localhost:3000` to open the GhostAssist HUD and test lab.
 
-### 4. Build Lightweight 10MB Native Desktop Binary (Tauri)
-\`\`\`bash
-# Install Tauri CLI
-npm install -g @tauri-apps/cli
+### 4. One-Click Install (prebuilt)
 
-# Build frontend & native binary
-npm run build
-cargo tauri build
-\`\`\`
-Installers will be generated under:
-- **Windows**: \`src-tauri/target/release/bundle/msi/GhostAssist_1.0.0_x64_en-US.msi\`
-- **macOS**: \`src-tauri/target/release/bundle/dmg/GhostAssist_1.0.0_aarch64.dmg\`
-- **Linux**: \`src-tauri/target/release/bundle/appimage/ghostassist_1.0.0_amd64.AppImage\`
+**macOS / Linux**
+```bash
+curl -fsSL https://raw.githubusercontent.com/kuenane/GhostAssist/main/install.sh | sh
+```
+
+**Windows (PowerShell)**
+```powershell
+irm https://raw.githubusercontent.com/kuenane/GhostAssist/main/install.ps1 | iex
+```
+
+Or download the installer for your OS from the [latest release](https://github.com/kuenane/GhostAssist/releases/latest): `.exe`/`.msi` (Windows), `.dmg` (macOS), `.deb` / `.rpm` / `.AppImage` (Linux).
+
+### 5. Build From Source
+```bash
+npm install
+npx tauri build
+```
+Linux needs `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`. Bundles land in `src-tauri/target/release/bundle/`.
+
+### 6. Publish a Release (builds all OS installers)
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+The `Release` workflow builds Windows, macOS (Apple Silicon + Intel) and Linux installers and attaches them to the GitHub release.
+
+> The desktop app has no backend server: add your own API key (Gemini, NVIDIA NIM, Groq, etc.) in Settings. macOS builds are unsigned, so the installer script clears the quarantine flag.
 
 ---
 

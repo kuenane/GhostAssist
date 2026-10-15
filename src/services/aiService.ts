@@ -1,6 +1,7 @@
 import { AIProvider, AnswerMode, AIAnswer, ResumeProfile } from '../types';
 import { keyVault } from './keyVault';
 import { dbService } from './db';
+import { isDesktop, proxyPost, geminiGenerate } from './http';
 
 export const SYSTEM_PROMPTS: Record<AnswerMode, string> = {
   bullet: `You are GhostAssist, an invisible, ultra-sharp real-time interview & meeting copilot. 
@@ -115,26 +116,16 @@ The candidate is answering questions about themselves in a live job interview. W
       return this.callOpenAIVision(imageBase64, userQuery);
     }
 
-    // Default to server Gemini vision
     try {
-      const res = await fetch('/api/ai/gemini/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userQuery,
-          imageBase64,
-          systemInstruction:
-            'You are GhostAssist Vision, an undetectable desktop copilot. Extract text/code from this screenshot, identify the problem, and provide an immediate, structured solution that the candidate can explain out loud.',
-        }),
+      const text = await geminiGenerate({
+        apiKey: keyVault.getConfig('gemini')?.apiKey,
+        model: keyVault.getConfig('gemini')?.model,
+        prompt: userQuery,
+        imageBase64,
+        systemInstruction:
+          'You are GhostAssist Vision, an undetectable desktop copilot. Extract text/code from this screenshot, identify the problem, and provide an immediate, structured solution that the candidate can explain out loud.',
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Gemini Vision error (${res.status})`);
-      }
-
-      const data = await res.json();
-      return data.text || 'No response generated from visual analysis.';
+      return text || 'No response generated from visual analysis.';
     } catch (err: any) {
       console.error('Vision analysis error:', err);
       return `Visual Analysis Error: ${err.message}. You can switch providers or verify your API keys in Settings.`;
@@ -153,19 +144,9 @@ The candidate is answering questions about themselves in a live job interview. W
 
   private async callGemini(prompt: string, systemInstruction: string): Promise<string> {
     try {
-      const res = await fetch('/api/ai/gemini/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, systemInstruction }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error (${res.status})`);
-      }
-
-      const data = await res.json();
-      return data.text || 'No response returned from Gemini.';
+      const cfg = keyVault.getConfig('gemini');
+      const text = await geminiGenerate({ apiKey: cfg?.apiKey, model: cfg?.model, prompt, systemInstruction });
+      return text || 'No response returned from Gemini.';
     } catch (err: any) {
       return `GhostAssist AI Error: ${err.message}. Please configure a BYOK key in Settings or check server status.`;
     }
@@ -267,7 +248,7 @@ The candidate is answering questions about themselves in a live job interview. W
     };
 
     // Try direct fetch first; if blocked by CORS or mixed content, route via backend proxy
-    try {
+    if (!isDesktop()) try {
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -286,17 +267,9 @@ The candidate is answering questions about themselves in a live job interview. W
     }
 
     // Call server proxy
-    const proxyRes = await fetch('/api/ai/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: url,
-        headers: {
+    const proxyRes = await proxyPost(url, {
           Authorization: `Bearer ${apiKey}`,
-        },
-        body: payload,
-      }),
-    });
+        }, payload);
 
     if (!proxyRes.ok) {
       const err = await proxyRes.json().catch(() => ({}));
@@ -321,18 +294,10 @@ The candidate is answering questions about themselves in a live job interview. W
       temperature: 0.3,
     };
 
-    const proxyRes = await fetch('/api/ai/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: 'https://api.anthropic.com/v1/messages',
-        headers: {
+    const proxyRes = await proxyPost('https://api.anthropic.com/v1/messages', {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
-        },
-        body: payload,
-      }),
-    });
+        }, payload);
 
     if (!proxyRes.ok) {
       const err = await proxyRes.json().catch(() => ({}));
@@ -363,17 +328,9 @@ The candidate is answering questions about themselves in a live job interview. W
       max_tokens: 600,
     };
 
-    const proxyRes = await fetch('/api/ai/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: 'https://api.openai.com/v1/chat/completions',
-        headers: {
+    const proxyRes = await proxyPost('https://api.openai.com/v1/chat/completions', {
           Authorization: `Bearer ${apiKey}`,
-        },
-        body: payload,
-      }),
-    });
+        }, payload);
 
     const data = await proxyRes.json();
     return data.choices?.[0]?.message?.content || 'Unable to analyze image.';
