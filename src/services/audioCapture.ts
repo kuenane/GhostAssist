@@ -1,4 +1,6 @@
 import { AudioSpeaker, TranscriptItem } from '../types';
+import { sttService, STTProviderConfig, STTResult } from './sttService';
+import { keyVault } from './keyVault';
 
 export interface AudioCaptureCallbacks {
   onTranscript: (item: TranscriptItem) => void;
@@ -20,7 +22,6 @@ class AudioCaptureManager {
   private micAnalyser: AnalyserNode | null = null;
   private systemAnalyser: AnalyserNode | null = null;
   private animationFrameId: number | null = null;
-  private recognition: any = null;
   private isListening = false;
   private sessionId = 'current';
   private callbacks: AudioCaptureCallbacks | null = null;
@@ -46,7 +47,7 @@ class AudioCaptureManager {
       });
       this.micStream = stream;
       this.setupAudioNodes();
-      this.startSpeechRecognition();
+      this.startSTT();
       return true;
     } catch (err: any) {
       console.warn('Microphone access denied or unavailable:', err);
@@ -148,37 +149,33 @@ class AudioCaptureManager {
     this.animationFrameId = requestAnimationFrame(checkVolume);
   }
 
-  private startSpeechRecognition() {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      console.warn('SpeechRecognition API is not supported in this browser environment.');
-      return;
+  startSTT() {
+    // Configure STT service with OpenAI Whisper (using existing OpenAI key)
+    const openaiConfig = keyVault.getConfig('openai');
+    if (openaiConfig?.apiKey) {
+      sttService.setConfig({
+        provider: 'openai',
+        apiKey: openaiConfig.apiKey,
+        model: 'whisper-1',
+        language: 'en',
+      });
+    } else {
+      // Fallback: use Groq if configured (free tier)
+      const groqConfig = keyVault.getConfig('groq');
+      if (groqConfig?.apiKey) {
+        sttService.setConfig({
+          provider: 'groq',
+          apiKey: groqConfig.apiKey,
+          model: 'whisper-large-v3',
+          language: 'en',
+        });
+      }
     }
 
-    if (this.recognition) {
-      try {
-        this.recognition.stop();
-      } catch {}
-    }
+    sttService.setCallbacks(
+      (result: STTResult) => {
+        if (!result.text.trim()) return;
 
-    this.recognition = new SpeechRecognition();
-    this.recognition.continuous = true;
-    this.recognition.interimResults = true;
-    this.recognition.lang = 'en-US';
-
-    this.recognition.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const res = event.results[i];
-        const transcriptText = res[0].transcript.trim();
-        const isFinal = res.isFinal;
-        const confidence = res[0].confidence || 0.95;
-
-        if (!transcriptText) continue;
-
-        // Determine speaker based on system vs mic energy
-        // If system audio level was high, tag as interviewer
         const speaker: AudioSpeaker = 'interviewer';
 
         const item: TranscriptItem = {
@@ -186,39 +183,25 @@ class AudioCaptureManager {
           sessionId: this.sessionId,
           timestamp: Date.now(),
           speaker,
-          text: transcriptText,
-          confidence,
-          isFinal,
+          text: result.text.trim(),
+          confidence: result.confidence,
+          isFinal: result.isFinal,
         };
 
         this.callbacks?.onTranscript(item);
 
-        if (isFinal) {
-          this.checkIfQuestion(transcriptText);
+        if (result.isFinal) {
+          this.checkIfQuestion(result.text.trim());
         }
+      },
+      (error: string) => {
+        this.callbacks?.onError(error);
       }
-    };
+    );
 
-    this.recognition.onerror = (event: any) => {
-      if (event.error !== 'no-speech') {
-        console.warn('Speech recognition warning:', event.error);
-      }
-    };
-
-    this.recognition.onend = () => {
-      if (this.isListening) {
-        // Auto-restart continuous recognition
-        try {
-          this.recognition?.start();
-        } catch {}
-      }
-    };
-
-    try {
-      this.recognition.start();
+    if (this.micStream) {
+      sttService.startRecording(this.micStream);
       this.isListening = true;
-    } catch (e) {
-      console.warn('Could not start speech recognition:', e);
     }
   }
 
@@ -301,16 +284,12 @@ class AudioCaptureManager {
     this.isListening = false;
     this.stopInterviewSimulation();
 
+    // Stop STT service
+    sttService.stopRecording();
+
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
-    }
-
-    if (this.recognition) {
-      try {
-        this.recognition.stop();
-      } catch {}
-      this.recognition = null;
     }
 
     if (this.micStream) {
